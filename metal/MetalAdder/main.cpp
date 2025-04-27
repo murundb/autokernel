@@ -11,10 +11,7 @@
 #include "MetalAdder.hpp"
 
 template <class T>
-void add_array_openmp(const T *a, const T *b, T *c, size_t length);
-template <class T>
 void add_array_serial(const T *a, const T *b, T *c, size_t length);
-int omp_thread_count();
 template <class T>
 void statistics(T *array, size_t length, T &array_mean, T &array_std);
 
@@ -76,47 +73,11 @@ int main(int argc, char *argv[])
     std::cout << array_mean << unit_name << " \t +/- " << array_std << unit_name << std::endl
               << std::endl;
 
-    size_t max_threads = 10;
-    for (size_t threads = 1; threads <= max_threads; threads++)
-    {
-
-        // Verify OpenMP code --------------------------------------------------------------
-        omp_set_num_threads(threads);
-        adder->prepareData();
-        add_array_openmp(array_a, array_b, array_c, arrayLength);
-        adder->verifyResults();
-
-        // Profile OpenMP code -------------------------------------------------------------
-        for (size_t repeat = 0; repeat < repeats; repeat++)
-        {
-            auto start = std::chrono::high_resolution_clock::now();
-            add_array_openmp(array_a, array_b, array_c, arrayLength);
-            auto stop = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<time_unit>(stop - start).count();
-            durations[repeat] = duration;
-        }
-        statistics(durations, repeats, array_mean, array_std);
-        std::cout << "OpenMP (" << omp_thread_count() << " threads) code performance: " << std::endl;
-        std::cout << array_mean << unit_name << " \t +/- " << array_std << unit_name << std::endl
-                  << std::endl;
-    }
-
     delete[] durations;
     delete adder;
     device->release();
 }
 
-template <class T>
-void add_array_openmp(const T *a, const T *b, T *c, size_t length)
-{
-    // Compute array sum a+b=c parallely using OpenMP, template function
-#pragma omp parallel for
-    for (
-        size_t i = 0; i < length; i++)
-    {
-        c[i] = a[i] + b[i];
-    }
-}
 
 template <class T>
 void add_array_serial(const T *a, const T *b, T *c, size_t length)
@@ -126,15 +87,6 @@ void add_array_serial(const T *a, const T *b, T *c, size_t length)
     {
         c[i] = a[i] + b[i];
     }
-}
-
-int omp_thread_count()
-{
-    int n = 0;
-#pragma omp parallel reduction(+ \
-                               : n)
-    n += 1;
-    return n;
 }
 
 template <class T>

@@ -1,1 +1,0 @@
-I just followed https://larsgeb.github.io/2022/04/20/m1-gpu.html

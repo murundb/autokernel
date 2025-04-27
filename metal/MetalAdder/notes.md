@@ -8,5 +8,5 @@ xcrun -sdk macosx metallib MetalAdder/add.air -o MetalAdder/default.metallib
 ```
 
 ```
-/opt/homebrew/opt/llvm/bin/clang++ -std=c++17 -stdlib=libc++ -O2 -L/opt/homebrew/opt/libomp/lib -fopenmp -I./metal-cpp -fno-objc-arc -framework Metal -framework Foundation -framework MetalKit -g MetalAdder/main.cpp MetalAdder/MetalAdder.cpp -o 01-MetalAdder/benchmark.x
+/opt/homebrew/opt/llvm/bin/clang++ -std=c++17 -stdlib=libc++ -O2 -L/opt/homebrew/opt/libomp/lib -fopenmp -I./metal-cpp -fno-objc-arc -framework Metal -framework Foundation -framework MetalKit -g MetalAdder/main.cpp MetalAdder/MetalAdder.cpp -o MetalAdder/benchmark.x
 ```
