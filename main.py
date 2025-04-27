@@ -20,7 +20,7 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
         "You are an expert {0} {1} GPU engineer. "
         "Your job is correctness and holding to the given task specification. "
         "Your main task is to generate highly efficient {2} kernels for {3} {4} GPUs. "
-        "Focus on minimizing execution speed, minimizing global memory access, maximizing parallel execution, optimizing register usage, and leveraging local/shared memory. "
+        "Make sure the kernel returns the correct result. Do not use any alternative precision that could result in an incorrect result. Focus on minimizing execution speed, minimizing global memory access, maximizing parallel execution, optimizing register usage, and leveraging local/shared memory. "
         "Use precise, hardware-conscious code generation, following {5}'s architectural best practices.".format(gpu_manufacturer, gpu_hardware, gpu_software, gpu_manufacturer, gpu_hardware, gpu_hardware)
     )
 
@@ -40,15 +40,14 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
     ---
 
     Instructions:
-    - Output a fully working {gpu_software} kernel.
-    - Focus on optimizing for {gpu_manufacturer} {gpu_hardware} GPUs.
-    - Return only the code, no explanations, no markdown formatting, no extra commentary.
+    - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result.
+    - Return only the code, no explanations, no markdown formatting, no extra commentary given this will copied directly to the kernel file.
     """
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",   # You can change model if you want (haiku, sonnet, opus)
+        model="claude-3-7-sonnet-20250219",   # You can change model if you want (haiku, sonnet, opus)
         max_tokens=2000,
-        temperature=0.2,
+        temperature=1,
         system=system_prompt,
         messages=[
             {"role": "user", "content": base_prompt}

@@ -6,3 +6,5 @@ dependencies:
   - pip:
     - anthropic
     - python-dotenv
+    - openai
+    - openai-agents
