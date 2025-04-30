@@ -8,5 +8,6 @@ class GPUInfo:
 
 class GPUType(Enum):
     Qualcomm = GPUInfo("Adreno", "OpenCL")
+    Nvidia = GPUInfo("RTX", "Cuda")
     Apple = GPUInfo("M1", "Metal")
     OTHER = GPUInfo("Other", "Unknown")

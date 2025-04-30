@@ -1,6 +1,7 @@
 import anthropic
 import os
 from dotenv import load_dotenv
+from src.runners.cuda_runner import CudaRunner
 
 from src.gpu_types import GPUType
 
@@ -41,11 +42,11 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
 
     Instructions:
     - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result.
-    - Return only the code, no explanations, no markdown formatting, no extra commentary given this will copied directly to the kernel file.
+    - Return only the raw code, no explanations, no markdown formatting, no extra commentary given this will copied directly to the kernel file. Do not include language markers, code block formatting, or triple backticks in your response. Return only the raw code.
     """
 
     response = client.messages.create(
-        model="claude-3-7-sonnet-20250219",   # You can change model if you want (haiku, sonnet, opus)
+        model="claude-3-5-haiku-latest",   # You can change model if you want (haiku, sonnet, opus)
         max_tokens=2000,
         temperature=1,
         system=system_prompt,
@@ -58,33 +59,93 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
 
     return generated_kernel_code
 
+def run_and_time_kernel(kernel_code, matrix_dim=4096):
+    try:
+        import torch
+        import cupy as cp
+        
+        runner = CudaRunner()
+        
+        # Setup function for matrix multiplication
+        def matmul_setup():
+            # Create input matrices
+            a_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
+            b_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
+            
+            # Move to GPU
+            a_gpu = a_host.cuda()
+            b_gpu = b_host.cuda()
+            c_gpu = torch.zeros((matrix_dim, matrix_dim), dtype=torch.float32, device="cuda")
+            
+            # Calculate grid dimensions
+            block_size = (16, 16, 1)  # Default block size
+            grid_x = (matrix_dim + block_size[0] - 1) // block_size[0]
+            grid_y = (matrix_dim + block_size[1] - 1) // block_size[1]
+            grid = (grid_x, grid_y)
+            
+            # Store these for verification
+            runner.a_gpu = a_gpu
+            runner.b_gpu = b_gpu
+            runner.c_gpu = c_gpu
+            runner.matrix_dim = matrix_dim
+            
+            # Return kernel arguments and grid size
+            return [(int(a_gpu.data_ptr()), 
+                    int(b_gpu.data_ptr()), 
+                    int(c_gpu.data_ptr()), 
+                    np.int32(matrix_dim))], grid
+        
+        # Verification function for matrix multiplication
+        def verify_matmul():
+            # Copy result back to CPU
+            c_host = runner.c_gpu.cpu()
+            
+            # For matrices filled with 1.0, each element in C should be matrix_dim
+            expected_value = float(matrix_dim)
+            
+            # Check a few elements
+            sample_indices = [
+                (0, 0), (0, 1), (1, 0), 
+                (matrix_dim//2, matrix_dim//2),
+                (matrix_dim-1, matrix_dim-1)
+            ]
+            
+            all_correct = True
+            for i, j in sample_indices:
+                if abs(c_host[i, j].item() - expected_value) > 1e-5:
+                    print(f"Verification failed at [{i}, {j}]: Expected {expected_value}, got {c_host[i, j].item()}")
+                    all_correct = False
+                    break
+            
+            if all_correct:
+                print("Result verification passed for sampled elements")
+            
+            return all_correct
+        
+        # Run the kernel with our setup and verification functions
+        return runner.run_kernel(
+            kernel_code=kernel_code,
+            kernel_name="matmul",
+            input_setup_fn=matmul_setup,
+            verification_fn=verify_matmul,
+            num_iterations=5
+        )
+        
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 if __name__ == "__main__":
 
-    gpu_type = GPUType.Apple
+    gpu_type = GPUType.Nvidia
     gpu_manufacturer = gpu_type.name
     gpu_hardware = gpu_type.value.hardware
     gpu_software = gpu_type.value.software
 
     task = "Write {0} kernel that performs 4096x4096 matrix multiplication optimized for {1} {2} architecture.".format(gpu_software, gpu_manufacturer, gpu_hardware)
-
-    # constraints = (
-    #     "Use local memory tiling with 16x16 tiles. "
-    #     "Minimize global memory reads and writes. "
-    #     "Maximize usage of Adreno compute units without exceeding register limits. "
-    #     "Assume OpenCL 2.0 availability."
-    #     "Minimize the processing time on the GPU."
-    #     "Maximize GPU utilization"
-    # )
-
-#     manual_context = """
-# - Global memory accesses are slow; prefer coalesced reads/writes.
-# - Use __local memory for intermediate computations.
-# - Synchronization using barrier(CLK_LOCAL_MEM_FENCE) is available.
-# - Prefer vectorized loads (e.g., float4) when accessing memory.
-# - Tile sizes of 16x16 or 32x32 usually map well to Adreno thread dispatch units.
-# - Avoid excessive branching inside kernels.
-# """
-
     constraints = (
         "Minimize global memory reads and writes. "
         + "Maximize usage of {} compute units without exceeding register limits. ".format(gpu_hardware)
@@ -95,9 +156,9 @@ if __name__ == "__main__":
     manual_context = None
 
     kernel_code = generate_kernel(gpu_type, task, constraints, manual_context)
-
+    # Run and time the kernel directly without saving to a file
+    timing_data = run_and_time_kernel(kernel_code)
     # Save the generated kernel to a file
     output_filename = "generated_kernel.metal"
     with open(output_filename, "w") as f:
-        
         f.write(kernel_code)
