@@ -49,8 +49,8 @@ class OpenclRunner:
                 self.queue.finish()
                 start_time = time.time()
                 # Launch kernel
-                global_size = (grid_size[0]*block_size[0], grid_size[1]*block_size[1])
-                local_size = (block_size[0], block_size[1])
+                global_size = grid_size
+                local_size = block_size
                 kernel(self.queue, global_size, local_size, *args)
                 self.queue.finish()
                 end_time = time.time()

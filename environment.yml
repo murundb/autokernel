@@ -10,3 +10,4 @@ dependencies:
     - openai-agents
     - cupy-cuda12x
     - pyopencl
+    - pycuda
