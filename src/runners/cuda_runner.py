@@ -3,6 +3,8 @@ import time
 import numpy as np
 import json
 from typing import Dict, List, Any, Optional, Callable
+import cupy as cp
+import torch
 
 class CudaRunner:
     """
@@ -12,7 +14,6 @@ class CudaRunner:
     """
     def __init__(self):
         try:
-            import torch
             if not torch.cuda.is_available():
                 raise ImportError("CUDA is not available in PyTorch")
             
@@ -33,7 +34,7 @@ class CudaRunner:
                   input_setup_fn: Callable, 
                   verification_fn: Callable = None,
                   num_iterations: int = 5, 
-                  block_size: tuple = (16, 16, 1),
+                  block_size: tuple = (32, 32, 1),
                   grid_size: tuple = None) -> Dict[str, Any]:
         """
         Run the kernel and measure execution time
@@ -57,10 +58,12 @@ class CudaRunner:
         
         try:
             # Create PyTorch CUDA kernel
-            import cupy as cp
             
             # Compile the kernel with CuPy
-            module = cp.RawModule(code=kernel_code)
+            module = cp.RawModule(
+                code=kernel_code,
+                name_expressions=[kernel_name]
+            )
             kernel = module.get_function(kernel_name)
             
             # Get kernel inputs and grid size from the setup function
@@ -113,6 +116,8 @@ class CudaRunner:
             
         except Exception as e:
             import traceback
+            print(e)
+            print(traceback.format_exc())
             return {
                 "error": str(e),
                 "traceback": traceback.format_exc()

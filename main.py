@@ -2,7 +2,10 @@ import anthropic
 import os
 from dotenv import load_dotenv
 from src.runners.cuda_runner import CudaRunner
-
+import numpy as np
+import torch
+import cupy as cp
+        
 from src.gpu_types import GPUType
 
 load_dotenv()  # take environment variables
@@ -41,7 +44,7 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
     ---
 
     Instructions:
-    - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result.
+    - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result. The name of the kernel should be matrixMultiply.
     - Return only the raw code, no explanations, no markdown formatting, no extra commentary given this will copied directly to the kernel file. Do not include language markers, code block formatting, or triple backticks in your response. Return only the raw code.
     """
 
@@ -56,14 +59,12 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
     )
 
     generated_kernel_code = response.content[0].text
+    # generated_kernel_code = '__global__ void matrixMultiply(float* A, float* B, float* C, int N) {\n    __shared__ float sharedA[32][32];\n    __shared__ float sharedB[32][32];\n    \n    int bx = blockIdx.x; \n    int by = blockIdx.y;\n    int tx = threadIdx.x;\n    int ty = threadIdx.y;\n    \n    int row = by * 32 + ty;\n    int col = bx * 32 + tx;\n    \n    float sum = 0.0f;\n    \n    for (int m = 0; m < (N + 31) / 32; ++m) {\n        if (row < N && m * 32 + tx < N)\n            sharedA[ty][tx] = A[row * N + m * 32 + tx];\n        else\n            sharedA[ty][tx] = 0.0f;\n        \n        if (col < N && m * 32 + ty < N)\n            sharedB[ty][tx] = B[(m * 32 + ty) * N + col];\n        else\n            sharedB[ty][tx] = 0.0f;\n        \n        __syncthreads();\n        \n        for (int k = 0; k < 32; ++k)\n            sum += sharedA[ty][k] * sharedB[k][tx];\n        \n        __syncthreads();\n    }\n    \n    if (row < N && col < N)\n        C[row * N + col] = sum;\n}'
 
     return generated_kernel_code
 
 def run_and_time_kernel(kernel_code, matrix_dim=4096):
     try:
-        import torch
-        import cupy as cp
-        
         runner = CudaRunner()
         
         # Setup function for matrix multiplication
@@ -78,7 +79,7 @@ def run_and_time_kernel(kernel_code, matrix_dim=4096):
             c_gpu = torch.zeros((matrix_dim, matrix_dim), dtype=torch.float32, device="cuda")
             
             # Calculate grid dimensions
-            block_size = (16, 16, 1)  # Default block size
+            block_size = (32, 32, 1)  # Default block size
             grid_x = (matrix_dim + block_size[0] - 1) // block_size[0]
             grid_y = (matrix_dim + block_size[1] - 1) // block_size[1]
             grid = (grid_x, grid_y)
@@ -90,10 +91,10 @@ def run_and_time_kernel(kernel_code, matrix_dim=4096):
             runner.matrix_dim = matrix_dim
             
             # Return kernel arguments and grid size
-            return [(int(a_gpu.data_ptr()), 
+            return [int(a_gpu.data_ptr()), 
                     int(b_gpu.data_ptr()), 
                     int(c_gpu.data_ptr()), 
-                    np.int32(matrix_dim))], grid
+                    np.int32(matrix_dim)], grid
         
         # Verification function for matrix multiplication
         def verify_matmul():
@@ -125,7 +126,7 @@ def run_and_time_kernel(kernel_code, matrix_dim=4096):
         # Run the kernel with our setup and verification functions
         return runner.run_kernel(
             kernel_code=kernel_code,
-            kernel_name="matmul",
+            kernel_name="matrixMultiply",
             input_setup_fn=matmul_setup,
             verification_fn=verify_matmul,
             num_iterations=5
