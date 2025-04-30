@@ -2,9 +2,11 @@ import anthropic
 import os
 from dotenv import load_dotenv
 from src.runners.cuda_runner import CudaRunner
+from src.runners.opencl_runner import OpenclRunner
 import numpy as np
 import torch
 import cupy as cp
+import pyopencl as cl
         
 from src.gpu_types import GPUType
 
@@ -63,75 +65,102 @@ def generate_kernel(gpu_type, task_description, constraints=None, manual_context
 
     return generated_kernel_code
 
-def run_and_time_kernel(kernel_code, matrix_dim=4096):
+def run_and_time_kernel(kernel_code, matrix_dim=4096, backend="cuda"):
     try:
-        runner = CudaRunner()
-        
-        # Setup function for matrix multiplication
-        def matmul_setup():
-            # Create input matrices
-            a_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
-            b_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
-            
-            # Move to GPU
-            a_gpu = a_host.cuda()
-            b_gpu = b_host.cuda()
-            c_gpu = torch.zeros((matrix_dim, matrix_dim), dtype=torch.float32, device="cuda")
-            
-            # Calculate grid dimensions
-            block_size = (32, 32, 1)  # Default block size
-            grid_x = (matrix_dim + block_size[0] - 1) // block_size[0]
-            grid_y = (matrix_dim + block_size[1] - 1) // block_size[1]
-            grid = (grid_x, grid_y)
-            
-            # Store these for verification
-            runner.a_gpu = a_gpu
-            runner.b_gpu = b_gpu
-            runner.c_gpu = c_gpu
-            runner.matrix_dim = matrix_dim
-            
-            # Return kernel arguments and grid size
-            return [int(a_gpu.data_ptr()), 
-                    int(b_gpu.data_ptr()), 
-                    int(c_gpu.data_ptr()), 
-                    np.int32(matrix_dim)], grid
-        
-        # Verification function for matrix multiplication
-        def verify_matmul():
-            # Copy result back to CPU
-            c_host = runner.c_gpu.cpu()
-            
-            # For matrices filled with 1.0, each element in C should be matrix_dim
-            expected_value = float(matrix_dim)
-            
-            # Check a few elements
-            sample_indices = [
-                (0, 0), (0, 1), (1, 0), 
-                (matrix_dim//2, matrix_dim//2),
-                (matrix_dim-1, matrix_dim-1)
-            ]
-            
-            all_correct = True
-            for i, j in sample_indices:
-                if abs(c_host[i, j].item() - expected_value) > 1e-5:
-                    print(f"Verification failed at [{i}, {j}]: Expected {expected_value}, got {c_host[i, j].item()}")
-                    all_correct = False
-                    break
-            
-            if all_correct:
-                print("Result verification passed for sampled elements")
-            
-            return all_correct
-        
-        # Run the kernel with our setup and verification functions
-        return runner.run_kernel(
-            kernel_code=kernel_code,
-            kernel_name="matrixMultiply",
-            input_setup_fn=matmul_setup,
-            verification_fn=verify_matmul,
-            num_iterations=5
-        )
-        
+        if backend == "cuda":
+            runner = CudaRunner()
+            def matmul_setup():
+                a_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
+                b_host = torch.ones((matrix_dim, matrix_dim), dtype=torch.float32)
+                a_gpu = a_host.cuda()
+                b_gpu = b_host.cuda()
+                c_gpu = torch.zeros((matrix_dim, matrix_dim), dtype=torch.float32, device="cuda")
+                block_size = (32, 32, 1)
+                grid_x = (matrix_dim + block_size[0] - 1) // block_size[0]
+                grid_y = (matrix_dim + block_size[1] - 1) // block_size[1]
+                grid = (grid_x, grid_y)
+                runner.a_gpu = a_gpu
+                runner.b_gpu = b_gpu
+                runner.c_gpu = c_gpu
+                runner.matrix_dim = matrix_dim
+                return [int(a_gpu.data_ptr()), int(b_gpu.data_ptr()), int(c_gpu.data_ptr()), np.int32(matrix_dim)], grid
+
+            def verify_matmul():
+                c_host = runner.c_gpu.cpu()
+                expected_value = float(matrix_dim)
+                sample_indices = [
+                    (0, 0), (0, 1), (1, 0),
+                    (matrix_dim//2, matrix_dim//2),
+                    (matrix_dim-1, matrix_dim-1)
+                ]
+                all_correct = True
+                for i, j in sample_indices:
+                    if abs(c_host[i, j].item() - expected_value) > 1e-5:
+                        print(f"Verification failed at [{i}, {j}]: Expected {expected_value}, got {c_host[i, j].item()}")
+                        all_correct = False
+                        break
+                if all_correct:
+                    print("Result verification passed for sampled elements")
+                return all_correct
+
+            return runner.run_kernel(
+                kernel_code=kernel_code,
+                kernel_name="matrixMultiply",
+                input_setup_fn=matmul_setup,
+                verification_fn=verify_matmul,
+                num_iterations=5
+            )
+
+        elif backend == "opencl":
+            runner = OpenclRunner()
+            def matmul_setup(ctx):
+                mf = cl.mem_flags
+                a_host = np.ones((matrix_dim, matrix_dim), dtype=np.float32)
+                b_host = np.ones((matrix_dim, matrix_dim), dtype=np.float32)
+                c_host = np.zeros((matrix_dim, matrix_dim), dtype=np.float32)
+                a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a_host)
+                b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=b_host)
+                c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, c_host.nbytes)
+                block_size = (32, 32, 1)
+                grid_x = (matrix_dim + block_size[0] - 1) // block_size[0]
+                grid_y = (matrix_dim + block_size[1] - 1) // block_size[1]
+                grid = (grid_x, grid_y)
+                runner.a_buf = a_buf
+                runner.b_buf = b_buf
+                runner.c_buf = c_buf
+                runner.matrix_dim = matrix_dim
+                runner.c_host = c_host
+                return [a_buf, b_buf, c_buf, np.int32(matrix_dim)], grid
+
+            def verify_matmul():
+                cl.enqueue_copy(runner.queue, runner.c_host, runner.c_buf)
+                expected_value = float(matrix_dim)
+                sample_indices = [
+                    (0, 0), (0, 1), (1, 0),
+                    (matrix_dim//2, matrix_dim//2),
+                    (matrix_dim-1, matrix_dim-1)
+                ]
+                all_correct = True
+                for i, j in sample_indices:
+                    if abs(runner.c_host[i, j] - expected_value) > 1e-5:
+                        print(f"Verification failed at [{i}, {j}]: Expected {expected_value}, got {runner.c_host[i, j]}")
+                        all_correct = False
+                        break
+                if all_correct:
+                    print("Result verification passed for sampled elements")
+                return all_correct
+
+            return runner.run_kernel(
+                kernel_code=kernel_code,
+                kernel_name="matrixMultiply",
+                input_setup_fn=matmul_setup,
+                verification_fn=verify_matmul,
+                num_iterations=5
+            )
+
+        else:
+            raise ValueError(f"Unknown backend: {backend}")
+
     except Exception as e:
         import traceback
         return {
@@ -140,8 +169,11 @@ def run_and_time_kernel(kernel_code, matrix_dim=4096):
         }
 
 if __name__ == "__main__":
+    # Choose backend: "cuda" or "opencl"
+    # backend = os.environ.get("AUTOKERNEL_BACKEND", "cuda")
+    backend = "opencl"
 
-    gpu_type = GPUType.Nvidia
+    gpu_type = GPUType.Nvidia if backend == "cuda" else GPUType.Qualcomm  # Example: use AMD for OpenCL
     gpu_manufacturer = gpu_type.name
     gpu_hardware = gpu_type.value.hardware
     gpu_software = gpu_type.value.software
@@ -157,9 +189,7 @@ if __name__ == "__main__":
     manual_context = None
 
     kernel_code = generate_kernel(gpu_type, task, constraints, manual_context)
-    # Run and time the kernel directly without saving to a file
-    timing_data = run_and_time_kernel(kernel_code)
-    # Save the generated kernel to a file
-    output_filename = "generated_kernel.metal"
+    timing_data = run_and_time_kernel(kernel_code, backend=backend)
+    output_filename = f"generated_kernel.{gpu_software.lower()}"
     with open(output_filename, "w") as f:
         f.write(kernel_code)
