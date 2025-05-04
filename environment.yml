@@ -11,3 +11,4 @@ dependencies:
     - cupy-cuda12x
     - pyopencl
     - pycuda
+    - openai
