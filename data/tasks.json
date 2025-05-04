@@ -1,0 +1,7 @@
+{
+  "tasks": [
+    {
+      "task": "Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim)."
+    }
+  ]
+}

@@ -23,7 +23,17 @@ else:
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     llm = AnthropicProvider(anthropic_api_key)
 
+# Kernel manager setup
 kernel_manager = KernelManager(llm, simple_tokenizer, max_tokens=8000)
+
+# Tasks
+with open("data/tasks.json", "r", encoding="utf-8") as f:
+    tasks_data = json.load(f)
+
+# Ensure output directory exists
+output_dir = "output"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
 if __name__ == "__main__":
     backend = os.environ.get("AUTOKERNEL_BACKEND", "opencl")
@@ -38,37 +48,44 @@ if __name__ == "__main__":
     for key, value in device_info.items():
         device_info_str += f"{key}: {value}\n"
 
-    timing_data = None
-    kernel_config = None
-    output_filename = f"generated_kernel.{gpu_software.lower()}"
-    kernel_configs = []
-    history = PromptHistory()
-    for i in range(5):
-        task = f"Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim)."
-        constraints = (
-            "Minimize global memory reads and writes. "
-            + f"Maximize usage of {gpu_hardware} compute units without exceeding register limits. "
-            + "Minimize the processing time on the GPU. "
-            + "Maximize GPU utilization. "
-            + f"Device Information: {device_info_str}"
-            + (
-                f"\nThe previous generated kernel: {kernel_config} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
-                if timing_data and 'average_ms' in timing_data
-                else (
-                    f"\nThe previous generated kernel: {kernel_config} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
-                    if timing_data and 'error' in timing_data
-                    else ""
-                )
+    if "tasks" in tasks_data:
+        tasks_list = tasks_data["tasks"]
+        for task_entry in tasks_list:
+            task = task_entry["task"].format(
+                gpu_software=gpu_software,
+                gpu_manufacturer=gpu_manufacturer,
+                gpu_hardware=gpu_hardware
             )
-        )
+            timing_data = None
+            kernel_config = None
+            output_filename = f"output/generated_kernel.{gpu_software.lower()}"
+            kernel_configs = []
+            history = PromptHistory()
+            for i in range(5):
+                constraints = (
+                    "Minimize global memory reads and writes. "
+                    + f"Maximize usage of {gpu_hardware} compute units without exceeding register limits. "
+                    + "Minimize the processing time on the GPU. "
+                    + "Maximize GPU utilization. "
+                    + f"Device Information: {device_info_str}"
+                    + (
+                        f"\nThe previous generated kernel: {kernel_config} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
+                        if timing_data and 'average_ms' in timing_data
+                        else (
+                            f"\nThe previous generated kernel: {kernel_config} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
+                            if timing_data and 'error' in timing_data
+                            else ""
+                        )
+                    )
+                )
 
-        manual_context = None
+                manual_context = None
 
-        kernel_config = kernel_manager.generate_kernel(
-            gpu_type, task, constraints, manual_context, history
-        )
-        timing_data = kernel_manager.run_and_time_kernel(kernel_config, backend=backend)
-        kernel_configs.append(kernel_config)
-    history.save("prompt_history.json")
-    with open(output_filename, "w", encoding='utf-8') as f:
-        f.write(json.dumps(kernel_configs, indent=4, ensure_ascii=False))
+                kernel_config = kernel_manager.generate_kernel(
+                    gpu_type, task, constraints, manual_context, history
+                )
+                timing_data = kernel_manager.run_and_time_kernel(kernel_config, backend=backend)
+                kernel_configs.append(kernel_config)
+            history.save("output/prompt_history.json")
+            with open(output_filename, "w", encoding='utf-8') as f:
+                f.write(json.dumps(kernel_configs, indent=4, ensure_ascii=False))
