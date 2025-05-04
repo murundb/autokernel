@@ -62,7 +62,7 @@ class OpenclRunner:
             min_time = min(execution_times)
             max_time = max(execution_times)
 
-            is_correct = verification_fn() if verification_fn else None
+            is_correct, msg = verification_fn() if verification_fn else (None, None)
 
             timing_results = {
                 "iterations": num_iterations,
@@ -71,6 +71,7 @@ class OpenclRunner:
                 "max_ms": max_time,
                 "all_times_ms": execution_times,
                 "correct_result": is_correct,
+                "verification_feedback": msg,
                 "block_size": block_size,
                 "grid_size": grid_size
             }

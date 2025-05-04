@@ -1,12 +1,28 @@
 {
   "tasks": [
     {
+      "kernel_name": "simpleMLP",
+      "task": "Write {gpu_software} kernel that implements a simple MLP: a linear layer (matrix-vector multiplication), followed by ReLU activation, followed by average pooling. The input is a vector of size 2048, the weight matrix is 2048x2048, and the output is a single float (the average of the ReLU outputs). The signature of the kernel should strictly be __kernel void simpleMLP(__global const float* restrict input, __global const float* restrict weights, __global float* restrict result, const int dim).",
+      "input_args": [
+        {"name": "input", "type": "matrix", "shape": [2048], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "weights", "type": "matrix", "shape": [2048, 2048], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "result", "type": "float", "dtype": "float32", "init": "zero", "role": "output"},
+        {"name": "matrix_dim", "type": "int", "value": 2048, "role": "input"}
+      ],
+      "verification": {
+        "type": "scalar_equals",
+        "expected_value": 2048,
+        "tolerance": 1e-5
+      },
+      "disabled" : false
+    },
+    {
       "kernel_name": "matrixMultiply",
-      "task": "Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim).",
+      "task": "Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict Result, const int matrix_dim).",
       "input_args": [
         {"name": "A", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "ones", "role": "input"},
         {"name": "B", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "ones", "role": "input"},
-        {"name": "C", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "zeros", "role": "output"},
+        {"name": "Result", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "zeros", "role": "output"},
         {"name": "matrix_dim", "type": "int", "value": 4096, "role": "input"}
       ],
       "verification": {
@@ -14,7 +30,23 @@
         "expected_value": 4096,
         "sample_indices": [[0,0], [0,1], [1,0], [2048,2048], [4095,4095]],
         "tolerance": 1e-5
-      }
+      },
+      "disabled" : true
+    },
+    {
+      "kernel_name": "matrixReduce",
+      "task": "Write {gpu_software} kernel that reduces an 2048x2048 matrix to a single float by summing all its elements, optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixReduce(__global const float* restrict A, __global float* restrict result, const int matrix_dim).",
+      "input_args": [
+        {"name": "A", "type": "matrix", "shape": [2048, 2048], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "result", "type": "float", "dtype": "float32", "init": "zero", "role": "output"},
+        {"name": "matrix_dim", "type": "int", "value": 2048, "role": "input"}
+      ],
+      "verification": {
+        "type": "scalar_equals",
+        "expected_value": 4194304,
+        "tolerance": 1e-5
+      },
+      "disabled" : true
     }
   ]
 }

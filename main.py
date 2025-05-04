@@ -52,6 +52,9 @@ if __name__ == "__main__":
     if "tasks" in tasks_data:
         tasks_list = tasks_data["tasks"]
         for task_entry in tasks_list:
+            if task_entry["disabled"]:
+                print(f"Skipping disabled task: {task_entry['kernel_name']}")
+                continue
             task = task_entry["task"].format(
                 gpu_software=gpu_software,
                 gpu_manufacturer=gpu_manufacturer,

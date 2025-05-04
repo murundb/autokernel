@@ -12,6 +12,8 @@ class KernelManager:
         self.llm = llm
         self.tokenizer = tokenizer
         self.max_tokens = max_tokens
+        self.cuda_runner = CudaRunner()
+        self.opencl_runner = OpenclRunner()
 
     def generate_kernel(self, gpu_type, task_description, constraints=None, manual_context=None, history=None):
         gpu_manufacturer = gpu_type.name
@@ -71,7 +73,7 @@ class KernelManager:
     ):
         try:
             if backend == "cuda":
-                runner = CudaRunner()
+                runner = self.cuda_runner
                 return runner.run_kernel(
                     kernel_code=kernel_config["kernel_code"],
                     kernel_name=kernel_name,
@@ -80,7 +82,7 @@ class KernelManager:
                     num_iterations=5
                 )
             elif backend == "opencl":
-                runner = OpenclRunner()
+                runner = self.opencl_runner
                 return runner.run_kernel(
                     kernel_code=kernel_config["kernel_code"],
                     kernel_name=kernel_name,
