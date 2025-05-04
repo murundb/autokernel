@@ -1,7 +1,20 @@
 {
   "tasks": [
     {
-      "task": "Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim)."
+      "kernel_name": "matrixMultiply",
+      "task": "Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim).",
+      "input_args": [
+        {"name": "A", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "B", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "C", "type": "matrix", "shape": [4096, 4096], "dtype": "float32", "init": "zeros", "role": "output"},
+        {"name": "matrix_dim", "type": "int", "value": 4096, "role": "input"}
+      ],
+      "verification": {
+        "type": "matrix_equals",
+        "expected_value": 4096,
+        "sample_indices": [[0,0], [0,1], [1,0], [2048,2048], [4095,4095]],
+        "tolerance": 1e-5
+      }
     }
   ]
 }

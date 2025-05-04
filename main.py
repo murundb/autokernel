@@ -8,6 +8,7 @@ from src.prompt.history import PromptHistory
 from src.gpu_types import GPUType
 from src.kernel.kernel_manager import KernelManager
 from src.utils.device_info import get_device_info
+from src.utils.dynamic_setup import create_input_setup_fn, create_verification_fn
 
 load_dotenv()
 
@@ -84,7 +85,17 @@ if __name__ == "__main__":
                 kernel_config = kernel_manager.generate_kernel(
                     gpu_type, task, constraints, manual_context, history
                 )
-                timing_data = kernel_manager.run_and_time_kernel(kernel_config, backend=backend)
+                input_setup_fn = create_input_setup_fn(task_entry["input_args"], backend)
+                verification_fn = create_verification_fn(task_entry["verification"], backend)
+
+                timing_data = kernel_manager.run_and_time_kernel(
+                    task_entry["kernel_name"],
+                    kernel_config,
+                    backend=backend,
+                    matrix_dim=4096,
+                    input_setup_fn=input_setup_fn,
+                    verification_fn=verification_fn
+                )
                 kernel_configs.append(kernel_config)
             history.save("output/prompt_history.json")
             with open(output_filename, "w", encoding='utf-8') as f:
