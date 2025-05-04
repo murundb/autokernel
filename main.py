@@ -18,7 +18,7 @@ def simple_tokenizer(messages):
 provider = os.getenv("LLM_PROVIDER", "anthropic")
 if provider == "openai":
     openai_api_key = os.getenv("OPENAI_API_KEY")
-    llm = OpenAIProvider(openai_api_key, model="o3-mini")
+    llm = OpenAIProvider(openai_api_key, model="o4-mini")
 else:
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     llm = AnthropicProvider(anthropic_api_key)
@@ -44,14 +44,22 @@ if __name__ == "__main__":
     kernel_configs = []
     history = PromptHistory()
     for i in range(5):
-        task = f"Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture."
+        task = f"Write {gpu_software} kernel that performs 4096x4096 matrix multiplication optimized for {gpu_manufacturer} {gpu_hardware} architecture. The signature of the kernel should be __kernel void matrixMultiply(__global const float* restrict A, __global const float* restrict B, __global float* restrict C, const int matrix_dim)."
         constraints = (
             "Minimize global memory reads and writes. "
             + f"Maximize usage of {gpu_hardware} compute units without exceeding register limits. "
             + "Minimize the processing time on the GPU. "
             + "Maximize GPU utilization. "
             + f"Device Information: {device_info_str}"
-            + (f"\nThe previous generated kernel: {kernel_config} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations." if timing_data else "")
+            + (
+                f"\nThe previous generated kernel: {kernel_config} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
+                if timing_data and 'average_ms' in timing_data
+                else (
+                    f"\nThe previous generated kernel: {kernel_config} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
+                    if timing_data and 'error' in timing_data
+                    else ""
+                )
+            )
         )
 
         manual_context = None

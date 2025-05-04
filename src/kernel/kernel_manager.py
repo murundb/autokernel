@@ -44,7 +44,7 @@ class KernelManager:
         ---
 
         Instructions:
-        - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result. The name of the kernel should be matrixMultiply.
+        - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result. 
         - Return a python dictionary in JSON format with key "kernel_code" which contains the raw code for the kernel, the global size and local size in the "global_size" and "local_size" keys. I want no explanations, no markdown formatting, no extra commentary given this will be copied directly to the kernel file. Do not include language markers, code block formatting, or triple backticks in your response. Return only the raw code, global size, and local size.
         """
 

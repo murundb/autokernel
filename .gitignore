@@ -9,3 +9,13 @@ metal/MetalAdder/default.metallib
 metal/MetalMatrixMultiplier/*.x
 metal/MetalMatrixMultiplier/custom_benchmark*
 metal/MetalMatrixMultiplier/default.metallib
+
+__pycache__/
+**/__pycache__/
+
+.vscode
+temp*
+*.ipynb
+
+generated_kernel*
+prompt_history*
