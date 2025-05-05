@@ -14,7 +14,7 @@
         "expected_value": 2048,
         "tolerance": 1e-5
       },
-      "disabled" : false
+      "disabled" : true
     },
     {
       "kernel_name": "matrixMultiply",
@@ -47,6 +47,26 @@
         "tolerance": 1e-5
       },
       "disabled" : true
+    },
+    {
+      "kernel_name": "residualBlock",
+      "task": "Write {gpu_software} kernel that implements a residual block as used in DNNs: given an input vector x of size 1024, two weight matrices W1 and W2 of size 1024x1024, and two bias vectors b1 and b2 of size 1024, compute result = ReLU(W2 * ReLU(W1 * x + b1) + b2 + x). The signature of the kernel should be __kernel void residualBlock(__global const float* restrict x, __global const float* restrict W1, __global const float* restrict b1, __global const float* restrict W2, __global const float* restrict b2, __global float* restrict result, const int dim).",
+      "input_args": [
+        {"name": "x", "type": "matrix", "shape": [1024], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "W1", "type": "matrix", "shape": [1024, 1024], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "b1", "type": "matrix", "shape": [1024], "dtype": "float32", "init": "zeros", "role": "input"},
+        {"name": "W2", "type": "matrix", "shape": [1024, 1024], "dtype": "float32", "init": "ones", "role": "input"},
+        {"name": "b2", "type": "matrix", "shape": [1024], "dtype": "float32", "init": "zeros", "role": "input"},
+        {"name": "result", "type": "matrix", "shape": [1024], "dtype": "float32", "init": "zeros", "role": "output"},
+        {"name": "dim", "type": "int", "value": 1024, "role": "input"}
+      ],
+      "verification": {
+        "type": "vector_equals",
+        "expected_value": [1048577, 1048577, 1048577, 1048577],
+        "sample_indices": [0, 1, 512, 1023],
+        "tolerance": 1e-5
+      },
+      "disabled": false
     }
   ]
 }

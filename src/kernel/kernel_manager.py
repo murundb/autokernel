@@ -24,10 +24,10 @@ class KernelManager:
             f"You are an expert {gpu_manufacturer} {gpu_hardware} GPU engineer. "
             f"Your job is correctness and holding to the given task specification. "
             f"Your main task is to generate highly efficient {gpu_software} kernels for {gpu_manufacturer} {gpu_hardware} GPUs. "
-            "Structure your output in JSON format strictly."
             "Make sure the kernel returns the correct result. Do not use any alternative precision that could result in an incorrect result. "
             "Focus on minimizing execution speed, minimizing global memory access, maximizing parallel execution, optimizing register usage, and leveraging local/shared memory. "
             f"Use precise, hardware-conscious code generation, following {gpu_hardware}'s architectural best practices."
+            """Structure your output in JSON format strictly. Return output as a single-line JSON string where every newline is written as "\n" (two characters), not as an actual line break."""
         )
 
         base_prompt = f"""
@@ -47,7 +47,7 @@ class KernelManager:
 
         Instructions:
         - Propose a new {gpu_software} kernel which aims to reduce the runtime of the operation, while ensuring the kernel returns the correct result. 
-        - Return a python dictionary in JSON format with key "kernel_code" which contains the raw code for the kernel, the global size and local size in the "global_size" and "local_size" keys. I want no explanations, no markdown formatting, no extra commentary given this will be copied directly to the kernel file. Do not include language markers, code block formatting, or triple backticks in your response. Return only the raw code, global size, and local size.
+        - Return a python dictionary in JSON format with key "kernel_code" which contains the raw code for the kernel, the global size and local size in the "global_size" and "local_size" keys. I want no explanations, no markdown formatting, no extra commentary given this will be copied directly to the kernel file. Do not include language markers, code block formatting, triple backticks, or any other quotation or formatting around the JSON output. Return only the raw code, global size, and local size. Global and local size should not have any operators within them. They should be list of numbers. 
         """
 
         messages = history.history.copy() if history else []

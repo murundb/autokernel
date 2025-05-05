@@ -137,6 +137,38 @@ def create_verification_fn(verification, backend):
                     return False, f"Verification failed: Expected {expected}, got {c_host_scalar}"
                 print("Result verification passed for scalar")
                 return True, "Result verification passed for scalar"
+        elif verification["type"] == "vector_equals":
+            expected = verification["expected_value"]
+            indices = verification.get("sample_indices", None)
+            tol = verification.get("tolerance", 1e-5)
+            if backend == "cuda":
+                # Assume vector is stored in runner.result_gpu as a tensor
+                v_host = runner.result_gpu.cpu().numpy() if hasattr(runner.result_gpu, "cpu") else runner.result_gpu
+                if indices is not None:
+                    for idx in indices:
+                        if abs(v_host[idx] - expected[idx]) > tol:
+                            print(f"Verification failed at [{idx}]: Expected {expected[idx]}, got {v_host[idx]}")
+                            return False, f"Verification failed at [{idx}]: Expected {expected[idx]}, got {v_host[idx]}"
+                else:
+                    if not (abs(v_host - expected) <= tol).all():
+                        print(f"Verification failed: Expected {expected}, got {v_host}")
+                        return False, f"Verification failed: Expected {expected}, got {v_host}"
+                print("Result verification passed for vector")
+                return True, "Result verification passed for vector"
+            elif backend == "opencl":
+                cl.enqueue_copy(runner.queue, runner.result_host, runner.result_buf)
+                v_host = runner.result_host
+                if indices is not None:
+                    for idx in indices:
+                        if abs(v_host[idx] - expected[idx]) > tol:
+                            print(f"Verification failed at [{idx}]: Expected {expected[idx]}, got {v_host[idx]}")
+                            return False, f"Verification failed at [{idx}]: Expected {expected[idx]}, got {v_host[idx]}"
+                else:
+                    if not (abs(v_host - expected) <= tol).all():
+                        print(f"Verification failed: Expected {expected}, got {v_host}")
+                        return False, f"Verification failed: Expected {expected}, got {v_host}"
+                print("Result verification passed for vector")
+                return True, "Result verification passed for vector"
         # Add more verification types as needed
         raise NotImplementedError("Verification type not implemented")
     return verify

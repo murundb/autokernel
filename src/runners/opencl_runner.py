@@ -42,6 +42,11 @@ class OpenclRunner:
             args, dynamic_grid_size = input_setup_fn(self.ctx)
             if grid_size is None:
                 grid_size = dynamic_grid_size
+            
+            if isinstance(grid_size, int):
+                grid_size = [grid_size]
+            if isinstance(block_size, int):
+                block_size = [block_size]
 
             execution_times = []
 
