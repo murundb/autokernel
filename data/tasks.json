@@ -14,7 +14,7 @@
         "expected_value": 2048,
         "tolerance": 1e-5
       },
-      "disabled" : true
+      "disabled" : false
     },
     {
       "kernel_name": "matrixMultiply",
@@ -31,7 +31,7 @@
         "sample_indices": [[0,0], [0,1], [1,0], [2048,2048], [4095,4095]],
         "tolerance": 1e-5
       },
-      "disabled" : true
+      "disabled" : false
     },
     {
       "kernel_name": "matrixReduce",
@@ -46,7 +46,7 @@
         "expected_value": 4194304,
         "tolerance": 1e-5
       },
-      "disabled" : true
+      "disabled" : false
     },
     {
       "kernel_name": "residualBlock",

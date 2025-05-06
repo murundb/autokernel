@@ -9,7 +9,17 @@ from src.gpu_types import GPUType
 from src.kernel.kernel_manager import KernelManager
 from src.utils.device_info import get_device_info
 from src.utils.dynamic_setup import create_input_setup_fn, create_verification_fn
+import concurrent.futures
 
+def run_with_timeout(func, timeout, *args, **kwargs):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            result = future.result(timeout=timeout)
+            return result
+        except concurrent.futures.TimeoutError:
+            print(f"Function timed out after {timeout} seconds")
+            return None
 load_dotenv()
 
 def simple_tokenizer(messages):
@@ -73,10 +83,10 @@ if __name__ == "__main__":
                     + "Maximize GPU utilization. "
                     + f"Device Information: {device_info_str}"
                     + (
-                        f"\nThe previous generated kernel: {kernel_config} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
+                        f"\nThe previous generated kernel: {kernel_configs[-1]} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
                         if timing_data and 'average_ms' in timing_data
                         else (
-                            f"\nThe previous generated kernel: {kernel_config} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
+                            f"\nThe previous generated kernel: {kernel_configs[-1]} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
                             if timing_data and 'error' in timing_data
                             else ""
                         )
@@ -85,21 +95,28 @@ if __name__ == "__main__":
 
                 manual_context = None
 
-                kernel_config = kernel_manager.generate_kernel(
+                kernel_config = kernel_manager.generate_kernels(
                     gpu_type, task, constraints, manual_context, history
                 )
-                input_setup_fn = create_input_setup_fn(task_entry["input_args"], backend)
-                verification_fn = create_verification_fn(task_entry["verification"], backend)
 
-                timing_data = kernel_manager.run_and_time_kernel(
-                    task_entry["kernel_name"],
-                    kernel_config,
-                    backend=backend,
-                    matrix_dim=4096,
-                    input_setup_fn=input_setup_fn,
-                    verification_fn=verification_fn
-                )
-                kernel_configs.append(kernel_config)
+                for kernel_id in range(len(kernel_config['kernels'])):
+                    print(f"Running kernel {kernel_id} for iteration {i}")
+                    local_vars = {}
+                    exec(kernel_config['kernels'][kernel_id]['runner_setup'], globals(), local_vars)
+                    kernel_configs.append(kernel_config['kernels'][kernel_id]['runner_setup'])
+                    runner_setup_fn = local_vars['runner_setup']
+                    try:
+                        timing_data = run_with_timeout(runner_setup_fn, timeout=20)  # 10 seconds timeout
+                        if timing_data is None:
+                            raise Exception("Setup function did not complete in time.")
+                    except Exception as e:
+                        import traceback
+                        print(e)
+                        print(traceback.format_exc())
+                        timing_data = {
+                            "error": str(e),
+                            "traceback": traceback.format_exc()
+                        }
             history.save("output/prompt_history.json")
             with open(output_filename, "w", encoding='utf-8') as f:
                 f.write(json.dumps(kernel_configs, indent=4, ensure_ascii=False))
