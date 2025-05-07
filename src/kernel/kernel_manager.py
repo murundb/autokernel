@@ -31,9 +31,7 @@ class KernelManager:
         )
 
         base_prompt = f"""
-        Refer to the following architecture context (extracted from the manual):
-
-        {manual_context if manual_context else "No additional context provided."}
+        {"Refer to the following architecture context (extracted from the manual): "+manual_context if manual_context else ""}
 
         ---
 

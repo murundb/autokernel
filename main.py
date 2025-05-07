@@ -65,17 +65,27 @@ if __name__ == "__main__":
             if task_entry["disabled"]:
                 print(f"Skipping disabled task: {task_entry['kernel_name']}")
                 continue
-            task = task_entry["task"].format(
-                gpu_software=gpu_software,
-                gpu_manufacturer=gpu_manufacturer,
-                gpu_hardware=gpu_hardware
-            )
+            if task_entry["code"]:
+                task = task_entry["task"].format(
+                    gpu_software=gpu_software,
+                    gpu_manufacturer=gpu_manufacturer,
+                    gpu_hardware=gpu_hardware,
+                    code=task_entry["code"]
+                )
+            else:
+                task = task_entry["task"].format(
+                    gpu_software=gpu_software,
+                    gpu_manufacturer=gpu_manufacturer,
+                    gpu_hardware=gpu_hardware
+                )
+            print(f"Task: {task}")
             timing_data = None
             kernel_config = None
-            output_filename = f"output/generated_kernel.{gpu_software.lower()}"
+            output_filename = f"output/generated_kernel_{task_entry['kernel_name']}.txt"
             kernel_configs = []
             history = PromptHistory()
-            for i in range(5):
+
+            for i in range(1):
                 constraints = (
                     "Minimize global memory reads and writes. "
                     + f"Maximize usage of {gpu_hardware} compute units without exceeding register limits. "
@@ -109,6 +119,7 @@ if __name__ == "__main__":
                         timing_data = run_with_timeout(runner_setup_fn, timeout=20)  # 10 seconds timeout
                         if timing_data is None:
                             raise Exception("Setup function did not complete in time.")
+                        kernel_configs.append(timing_data)
                     except Exception as e:
                         import traceback
                         print(e)
@@ -117,6 +128,18 @@ if __name__ == "__main__":
                             "error": str(e),
                             "traceback": traceback.format_exc()
                         }
-            history.save("output/prompt_history.json")
-            with open(output_filename, "w", encoding='utf-8') as f:
-                f.write(json.dumps(kernel_configs, indent=4, ensure_ascii=False))
+                        kernel_configs.append(timing_data)
+
+            print("-------------------------------------------------------------------------------------")
+            history.save(f"output/prompt_history_{task_entry['kernel_name']}.json")
+            kernel_and_timing_strings = []
+            for idx in range(0, len(kernel_configs), 2):
+                kernel_str = str(kernel_configs[idx])
+                timing_info = str(json.dumps(kernel_configs[idx + 1], indent=2)) if idx + 1 < len(kernel_configs) else ""
+                kernel_and_timing_strings.append(f"{kernel_str}\n{timing_info}")
+
+            # Save kernel_and_timing_strings in a text file
+            with open(output_filename, "w", encoding='utf-8') as txt_f:
+                txt_f.write(task)
+                txt_f.write("\n")
+                txt_f.write("\n\n".join(kernel_and_timing_strings))
