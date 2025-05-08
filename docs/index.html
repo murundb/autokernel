@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Best GPU Kernels Visualization</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #181c20;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 900px;
+      margin: 2em auto;
+      background: #23272e;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px #0008;
+      padding: 2em;
+    }
+    h1 {
+      text-align: center;
+      color: #7fdfff;
+      margin-bottom: 1.5em;
+    }
+    .kernel-block {
+      margin-bottom: 2.5em;
+      padding: 1.5em;
+      background: #222;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px #0006;
+    }
+    .task-title {
+      font-size: 1.3em;
+      color: #ffb86c;
+      margin-bottom: 0.7em;
+    }
+    .timing-info {
+      background: #1a2a1a;
+      color: #aaffaa;
+      padding: 0.7em 1em;
+      border-radius: 7px;
+      margin: 1em 0;
+      font-family: 'Fira Mono', 'Consolas', monospace;
+      font-size: 1em;
+      white-space: pre-wrap;
+    }
+    pre code {
+      font-size: 1.05em;
+      border-radius: 7px;
+      padding: 1em;
+      background: #181c20;
+      display: block;
+      overflow-x: auto;
+    }
+    .footer {
+      text-align: center;
+      color: #888;
+      margin-top: 3em;
+      font-size: 0.95em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Best GPU Kernels & Timing Results</h1>
+    <div id="kernels"></div>
+  </div>
+  <div class="footer">
+    Powered by <a href="https://github.com/murundb/autokernel" style="color:#7fdfff">autokernel</a> — Results auto-generated
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <script>
+    // Helper: fetch all JSON files matching best_kernel_*.json in current dir
+    async function fetchKernelFiles() {
+        const response = await fetch('manifest.json');
+        const files = await response.json();
+        return files;    
+    }
+
+    function formatTimingInfo(timing) {
+      if (!timing) return '';
+      if (timing.error) {
+        return `❌ <b>Error:</b> ${timing.error}\n\n<pre>${timing.traceback || ''}</pre>`;
+      }
+      let out = '';
+      for (const [k, v] of Object.entries(timing)) {
+        out += `<b>${k}:</b> ${v}\n`;
+      }
+      return out;
+    }
+
+    async function displayKernels() {
+      const container = document.getElementById('kernels');
+      const files = await fetchKernelFiles();
+
+      for (const file of files) {
+        try {
+          const resp = await fetch(file);
+          if (!resp.ok) continue;
+          const data = await resp.json();
+
+          const block = document.createElement('div');
+          block.className = 'kernel-block';
+
+          block.innerHTML = `
+            <div class="task-title">${data.task ? data.task : file.replace('best_kernel_', '').replace('.json', '')}</div>
+            <pre><code class="language-c">${data.kernel_code}</code></pre>
+            <div class="timing-info">${formatTimingInfo(data.timing_info)}</div>
+          `;
+          container.appendChild(block);
+        } catch (e) {
+          // Ignore missing files
+        }
+      }
+      // Highlight all code blocks
+      document.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+    }
+
+    displayKernels();
+  </script>
+</body>
+</html>

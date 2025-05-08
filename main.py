@@ -46,6 +46,9 @@ output_dir = "output"
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
+# Manifest
+best_kernel_files = []
+
 if __name__ == "__main__":
     backend = os.environ.get("AUTOKERNEL_BACKEND", "opencl")
     gpu_type = GPUType.Nvidia if backend == "cuda" else GPUType.Qualcomm
@@ -82,10 +85,10 @@ if __name__ == "__main__":
             timing_data = None
             kernel_config = None
             output_filename = f"output/generated_kernel_{task_entry['kernel_name']}.txt"
-            kernel_configs = []
+            kernel_configs = {}
             history = PromptHistory()
 
-            for i in range(1):
+            for i in range(3):
                 constraints = (
                     "Minimize global memory reads and writes. "
                     + f"Maximize usage of {gpu_hardware} compute units without exceeding register limits. "
@@ -93,11 +96,11 @@ if __name__ == "__main__":
                     + "Maximize GPU utilization. "
                     + f"Device Information: {device_info_str}"
                     + (
-                        f"\nThe previous generated kernel: {kernel_configs[-1]} took {timing_data['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
-                        if timing_data and 'average_ms' in timing_data
+                        f"\nThe previous generated kernel: {kernel_configs[i-1]['kernel_code']} took {kernel_configs[i-1]['timing_info']['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
+                        if i > 0 and kernel_configs.get(i-1) and kernel_configs[i-1]['timing_info'] and 'average_ms' in kernel_configs[i-1]['timing_info']
                         else (
-                            f"\nThe previous generated kernel: {kernel_configs[-1]} failed to run. Error: {timing_data['error']}. Please fix the issue and optimize further."
-                            if timing_data and 'error' in timing_data
+                            f"\nThe previous generated kernel: {kernel_configs[i-1]['kernel_code']} failed to run. Error: {kernel_configs[i-1]['timing_info']['error']}. Please fix the issue and optimize further."
+                            if i > 0 and kernel_configs.get(i-1) and kernel_configs[i-1]['timing_info'] and 'error' in kernel_configs[i-1]['timing_info']
                             else ""
                         )
                     )
@@ -113,13 +116,15 @@ if __name__ == "__main__":
                     print(f"Running kernel {kernel_id} for iteration {i}")
                     local_vars = {}
                     exec(kernel_config['kernels'][kernel_id]['runner_setup'], globals(), local_vars)
-                    kernel_configs.append(kernel_config['kernels'][kernel_id]['runner_setup'])
                     runner_setup_fn = local_vars['runner_setup']
                     try:
                         timing_data = run_with_timeout(runner_setup_fn, timeout=20)  # 10 seconds timeout
                         if timing_data is None:
                             raise Exception("Setup function did not complete in time.")
-                        kernel_configs.append(timing_data)
+                        kernel_configs[i] = {
+                            "kernel_code": kernel_config['kernels'][kernel_id]['runner_setup'],
+                            "timing_info": timing_data
+                        }
                     except Exception as e:
                         import traceback
                         print(e)
@@ -128,18 +133,41 @@ if __name__ == "__main__":
                             "error": str(e),
                             "traceback": traceback.format_exc()
                         }
-                        kernel_configs.append(timing_data)
+                        kernel_configs[i] = {
+                            "kernel_code": kernel_config['kernels'][kernel_id]['runner_setup'],
+                            "timing_info": timing_data
+                        }
 
             print("-------------------------------------------------------------------------------------")
             history.save(f"output/prompt_history_{task_entry['kernel_name']}.json")
             kernel_and_timing_strings = []
-            for idx in range(0, len(kernel_configs), 2):
-                kernel_str = str(kernel_configs[idx])
-                timing_info = str(json.dumps(kernel_configs[idx + 1], indent=2)) if idx + 1 < len(kernel_configs) else ""
-                kernel_and_timing_strings.append(f"{kernel_str}\n{timing_info}")
+            for i in range(len(kernel_configs.keys())):
+                if i in kernel_configs:
+                    kernel_str = str(kernel_configs[i]['kernel_code'])
+                    timing_info = str(json.dumps(kernel_configs[i]['timing_info'], indent=2))
+                    kernel_and_timing_strings.append(f"{kernel_str}\n{timing_info}")
 
             # Save kernel_and_timing_strings in a text file
             with open(output_filename, "w", encoding='utf-8') as txt_f:
                 txt_f.write(task)
-                txt_f.write("\n")
+                txt_f.write("\n\n-------------------------------------------\n\n")
                 txt_f.write("\n\n".join(kernel_and_timing_strings))
+            # After collecting kernel_and_timing_strings, also save the best kernel as JSON
+            best_idx = min(
+                (i for i in kernel_configs if 'average_ms' in kernel_configs[i]['timing_info']),
+                key=lambda i: kernel_configs[i]['timing_info']['average_ms'],
+                default=None
+            )
+            if best_idx is not None:
+                best_kernel = {
+                    "task": task,
+                    "kernel_code": kernel_configs[best_idx]['kernel_code'],
+                    "timing_info": kernel_configs[best_idx]['timing_info']
+                }
+                best_kernel_filename = f"docs/best_kernel_{task_entry['kernel_name']}.json"
+                with open(best_kernel_filename, "w", encoding='utf-8') as jf:
+                    json.dump(best_kernel, jf, indent=2)          
+                best_kernel_files.append(os.path.basename(best_kernel_filename))
+        manifest_path = "docs/manifest.json"
+        with open(manifest_path, "w", encoding="utf-8") as mf:
+            json.dump(best_kernel_files, mf, indent=2)
