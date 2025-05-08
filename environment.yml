@@ -8,3 +8,7 @@ dependencies:
     - python-dotenv
     - openai
     - openai-agents
+    - cupy-cuda12x
+    - pyopencl
+    - pycuda
+    - openai
