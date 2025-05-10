@@ -68,7 +68,7 @@ if __name__ == "__main__":
             if task_entry["disabled"]:
                 print(f"Skipping disabled task: {task_entry['kernel_name']}")
                 continue
-            if task_entry["code"]:
+            if "code" in task_entry and task_entry["code"]:                
                 task = task_entry["task"].format(
                     gpu_software=gpu_software,
                     gpu_manufacturer=gpu_manufacturer,

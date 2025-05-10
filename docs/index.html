@@ -64,11 +64,48 @@
       margin-top: 3em;
       font-size: 0.95em;
     }
+    .task-list {
+      margin-bottom: 2em;
+      padding: 1em;
+      background: #20242a;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px #0004;
+    }
+    .task-list ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .task-list li {
+      margin: 0.7em 0;
+      font-size: 1.1em;
+    }
+    .task-list a {
+      color: #7fdfff;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .task-list a:hover {
+      color: #ffb86c;
+      text-decoration: underline;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1.5em;
+      color: #7fdfff;
+      text-decoration: none;
+      font-size: 1.1em;
+    }
+    .back-link:hover {
+      color: #ffb86c;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Best GPU Kernels & Timing Results</h1>
+    <div id="task-list" class="task-list" style="display:none;"></div>
     <div id="kernels"></div>
   </div>
   <div class="footer">
@@ -95,34 +132,72 @@
       return out;
     }
 
-    async function displayKernels() {
-      const container = document.getElementById('kernels');
-      const files = await fetchKernelFiles();
-
-      for (const file of files) {
-        try {
-          const resp = await fetch(file);
-          if (!resp.ok) continue;
-          const data = await resp.json();
-
-          const block = document.createElement('div');
-          block.className = 'kernel-block';
-
-          block.innerHTML = `
-            <div class="task-title">${data.task ? data.task : file.replace('best_kernel_', '').replace('.json', '')}</div>
-            <pre><code class="language-c">${data.kernel_code}</code></pre>
-            <div class="timing-info">${formatTimingInfo(data.timing_info)}</div>
-          `;
-          container.appendChild(block);
-        } catch (e) {
-          // Ignore missing files
-        }
-      }
-      // Highlight all code blocks
-      document.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+    function getQueryParam(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
     }
 
-    displayKernels();
+    async function displayTaskList(files) {
+      const taskListDiv = document.getElementById('task-list');
+      taskListDiv.style.display = '';
+      let listHtml = '<ul>';
+      for (const file of files) {
+        let taskName = file.replace('best_kernel_', '').replace('.json', '');
+        listHtml += `<li><a href="?task=${encodeURIComponent(file)}">${taskName}</a></li>`;
+      }
+      listHtml += '</ul>';
+      taskListDiv.innerHTML = `<b>Select a task to view details:</b>${listHtml}`;
+    }
+
+    async function displayKernelForFile(file) {
+      const container = document.getElementById('kernels');
+      container.innerHTML = '';
+      try {
+        const resp = await fetch(file);
+        if (!resp.ok) {
+          container.innerHTML = `<div class="kernel-block">Could not load data for this task.</div>`;
+          return;
+        }
+        const data = await resp.json();
+
+        const block = document.createElement('div');
+        block.className = 'kernel-block';
+
+        block.innerHTML = `
+          <a class="back-link" href="./">&larr; Back to all tasks</a>
+          <div class="task-title"><b>Task Description:</b><br>${data.task ? `<pre style="white-space: pre-wrap;">${data.task}</pre>` : file.replace('best_kernel_', '').replace('.json', '')}</div>
+          <br>
+          <div><b>Best kernel code:</b></div>
+          <pre><code class="language-c">${data.kernel_code}</code></pre>
+          <br>
+          <div><b>Results:</b></div>
+          <div class="timing-info" style="overflow-wrap: break-word; word-break: break-all; max-width: 100%;">${formatTimingInfo(data.timing_info)}</div>
+        `;
+        container.appendChild(block);
+        // Highlight code
+        document.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+      } catch (e) {
+        container.innerHTML = `<div class="kernel-block">Error loading task.</div>`;
+      }
+    }
+
+    async function main() {
+      const files = await fetchKernelFiles();
+      const taskParam = getQueryParam('task');
+      const kernelsDiv = document.getElementById('kernels');
+      const taskListDiv = document.getElementById('task-list');
+      if (!taskParam) {
+        // Show the list of tasks
+        kernelsDiv.innerHTML = '';
+        await displayTaskList(files);
+      } else {
+        // Hide the task list, show only the selected kernel
+        taskListDiv.style.display = 'none';
+        await displayKernelForFile(taskParam);
+      }
+    }
+
+    main();
   </script>
 </body>
 </html>
