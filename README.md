@@ -7,9 +7,9 @@ To run the project initially:
 1. Create a new file in the root directory called `.env` and add the following variables:
 ```
 ANTHROPIC_API_KEY=
-LLM_PROVIDER=
+LLM_PROVIDER=                                       // options are anthropic, openai
 OPENAI_API_KEY=
-AUTOKERNEL_BACKEND=
+AUTOKERNEL_BACKEND=                                 // options are cuda, opencl
 ```
 
 2. Create the conda environment:
