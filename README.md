@@ -1,13 +1,31 @@
 # Read Me
 
-## List
+## Running
 
+To run the project initially:
+
+1. Create a new file in the root directory called `.env` and add the following variables:
+```
+ANTHROPIC_API_KEY=
+LLM_PROVIDER=
+OPENAI_API_KEY=
+AUTOKERNEL_BACKEND=
+```
+
+2. Create the conda environment:
 ```
 conda env create -f environment.yml
 ```
 
-Create a file called `.env` and add Anthropic key as `ANTHROPIC_API_KEY="your-key"`.
+3. Activate the conda environment:
+```
+conda activate <your-environment-name>
+```
 
+4. Run the project:
+```
+python main.py
+```
 
 ## VSCode Debugging Setup
 
