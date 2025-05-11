@@ -144,7 +144,16 @@ if __name__ == "__main__":
             for i in range(len(kernel_configs.keys())):
                 if i in kernel_configs:
                     kernel_str = str(kernel_configs[i]['kernel_code'])
-                    timing_info = str(json.dumps(kernel_configs[i]['timing_info'], indent=2))
+                    try:
+                        timing_info = str(json.dumps(kernel_configs[i]['timing_info'], indent=2))
+                    except TypeError:
+                        # Fallback: convert non-serializable objects to string
+                        def default_serializer(obj):
+                            try:
+                                return str(obj)
+                            except Exception:
+                                return "<unserializable>"
+                        timing_info = str(json.dumps(kernel_configs[i]['timing_info'], indent=2, default=default_serializer))
                     kernel_and_timing_strings.append(f"{kernel_str}\n{timing_info}")
 
             # Save kernel_and_timing_strings in a text file
@@ -165,8 +174,13 @@ if __name__ == "__main__":
                     "timing_info": kernel_configs[best_idx]['timing_info']
                 }
                 best_kernel_filename = f"docs/best_kernel_{task_entry['kernel_name']}.json"
+                def default_serializer(obj):
+                    try:
+                        return str(obj)
+                    except Exception:
+                        return "<unserializable>"
                 with open(best_kernel_filename, "w", encoding='utf-8') as jf:
-                    json.dump(best_kernel, jf, indent=2)          
+                    json.dump(best_kernel, jf, indent=2, default=default_serializer)          
                 best_kernel_files.append(os.path.basename(best_kernel_filename))
         manifest_path = "docs/manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as mf:
