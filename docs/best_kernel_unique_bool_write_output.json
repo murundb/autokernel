@@ -1,0 +1,29 @@
+{
+  "task": "Write OpenCL kernel that implements the cuda kernel provided below __global__ void unique_bool_write_output(\n    const int numel,\n    const int *num_true_p,\n    bool *values_out,\n    int64_t *counts_out) {\n  constexpr int false_idx = 0;\n  const int num_true = *num_true_p;\n  const int num_false = numel - num_true;\n  const int true_idx = num_false > 0;\n\n  if (blockIdx.x == 0 && threadIdx.x == 0) {\n    if (num_false > 0) {\n      values_out[false_idx] = false;\n      counts_out[false_idx] = num_false;\n    }\n    if (num_true > 0) {\n      values_out[true_idx] = true;\n      counts_out[true_idx] = num_true;\n    }\n  }\n}. The signature of the OpenCL kernel should match the signature of the cuda kernel.",
+  "task_name": "unique_bool_write_output",
+  "kernel_code": "def runner_setup():\n    import time\n    import numpy as np\n    import pyopencl as cl\n\n    # Add the kernel code into a python string\n    opencl_code = \"\"\"\n    __kernel void unique_bool_write_output(\n        const int numel,\n        __global const int * restrict num_true_p,\n        __global bool * restrict values_out,\n        __global long * restrict counts_out) {\n        \n        // Use a single thread for this operation\n        if (get_global_id(0) == 0) {\n            const int false_idx = 0;\n            const int num_true = *num_true_p;\n            const int num_false = numel - num_true;\n            const int true_idx = (num_false > 0) ? 1 : 0;\n            \n            if (num_false > 0) {\n                values_out[false_idx] = false;\n                counts_out[false_idx] = num_false;\n            }\n            if (num_true > 0) {\n                values_out[true_idx] = true;\n                counts_out[true_idx] = num_true;\n            }\n        }\n    }\n    \"\"\"\n\n    # Setup test parameters\n    num_iterations = 10\n    numel = 100000  # Total number of elements\n    num_true = 40000  # Number of true values\n\n    # Initialize host arrays\n    num_true_host = np.array([num_true], dtype=np.int32)\n    values_out_host = np.zeros(2, dtype=bool)\n    counts_out_host = np.zeros(2, dtype=np.int64)\n\n    # Function to verify the results\n    def verification_fn():\n        false_idx = 0\n        num_false = numel - num_true\n        true_idx = 1 if num_false > 0 else 0\n\n        expected_values = np.zeros(2, dtype=bool)\n        expected_counts = np.zeros(2, dtype=np.int64)\n\n        if num_false > 0:\n            expected_values[false_idx] = False\n            expected_counts[false_idx] = num_false\n        if num_true > 0:\n            expected_values[true_idx] = True\n            expected_counts[true_idx] = num_true\n\n        values_ok = np.array_equal(values_out_host, expected_values)\n        counts_ok = np.array_equal(counts_out_host, expected_counts)\n        \n        return values_ok and counts_ok, \"Results match!\" if (values_ok and counts_ok) else \"Results do NOT match!\"\n\n    # Create OpenCL context and queue\n    platforms = cl.get_platforms()\n    if not platforms:\n        raise RuntimeError(\"No OpenCL platforms found.\")\n    platform = platforms[0]\n    devices = platform.get_devices()\n    if not devices:\n        raise RuntimeError(\"No OpenCL devices found.\")\n    device = devices[0]\n    print(f\"Using OpenCL device: {device.name}\")\n    ctx = cl.Context([device])\n    queue = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)\n    \n    # Create OpenCL buffers\n    mf = cl.mem_flags\n    num_true_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=num_true_host)\n    values_out_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=2 * np.dtype(bool).itemsize)\n    counts_out_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=2 * np.dtype(np.int64).itemsize)\n    \n    # Build the kernel\n    program = cl.Program(ctx, opencl_code).build()\n    kernel = program.unique_bool_write_output\n    \n    execution_times = []\n    for i in range(num_iterations):\n        # Reset output buffers\n        cl.enqueue_fill_buffer(queue, values_out_buf, np.uint8(0), 0, 2 * np.dtype(bool).itemsize)\n        cl.enqueue_fill_buffer(queue, counts_out_buf, np.uint8(0), 0, 2 * np.dtype(np.int64).itemsize)\n        \n        queue.finish()\n        \n        # Launch kernel with just a single thread\n        event = kernel(queue, (1,), None, np.int32(numel), num_true_buf, values_out_buf, counts_out_buf)\n        \n        event.wait()\n        elapsed_time = 1e-6 * (event.profile.end - event.profile.start)  # Convert to ms\n        \n        # Copy results back to host\n        cl.enqueue_copy(queue, values_out_host, values_out_buf)\n        cl.enqueue_copy(queue, counts_out_host, counts_out_buf)\n        \n        execution_times.append(elapsed_time)\n        print(f\"Iteration {i+1}: {elapsed_time:.6f} ms\")\n    \n    avg_time = sum(execution_times) / len(execution_times)\n    min_time = min(execution_times)\n    max_time = max(execution_times)\n    \n    is_correct, msg = verification_fn()\n    \n    timing_result = {\n        \"iterations\": num_iterations,\n        \"average_ms\": avg_time,\n        \"min_ms\": min_time,\n        \"max_ms\": max_time,\n        \"all_times_ms\": execution_times,\n        \"correct_result\": is_correct,\n        \"verification_feedback\": msg,\n        \"global_size\": [1],\n        \"local_size\": \"None\"\n    }\n    return timing_result",
+  "timing_info": {
+    "iterations": 10,
+    "average_ms": 0.0024096,
+    "min_ms": 0.002048,
+    "max_ms": 0.003008,
+    "all_times_ms": [
+      0.003008,
+      0.002048,
+      0.002848,
+      0.002176,
+      0.002048,
+      0.002048,
+      0.002048,
+      0.002048,
+      0.003008,
+      0.002816
+    ],
+    "correct_result": true,
+    "verification_feedback": "Results match!",
+    "global_size": [
+      1
+    ],
+    "local_size": "None"
+  }
+}

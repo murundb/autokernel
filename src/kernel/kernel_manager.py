@@ -157,7 +157,10 @@ class KernelManager:
         response = self.llm.chat(messages, system_prompt=system_prompt)
         if history:
             history.add("assistant", response)
-        return json.loads(response)
+        try:
+            return json.loads(response)
+        except Exception as e:
+            return {"error": f"Failed to parse response as JSON: {str(e)}", "raw_response": response}
 
     def run_and_time_kernels(
         self, 

@@ -1,0 +1,27 @@
+{
+  "task": "Write OpenCL kernel that implements the cuda kernel provided below __global__ void scatter_kernel(\n    int64_t n,\n    const int64_t* input,\n    const int64_t* indices,\n    int64_t* output) {\n  CUDA_KERNEL_LOOP(i, n) {\n    output[indices[i]] = input[i];\n  }\n}. The signature of the OpenCL kernel should match the signature of the cuda kernel.",
+  "task_name": "scatter_kernel",
+  "kernel_code": "def runner_setup():\n    import time\n    import numpy as np\n    import pyopencl as cl\n\n    # Add the kernel code into a python string\n    opencl_code = \"\"\"\n    __kernel void scatter_kernel(\n        const long n,\n        __global const long* restrict input,\n        __global const long* restrict indices,\n        __global long* restrict output) {\n        \n        // Get global ID\n        const uint gid = get_global_id(0);\n        const uint total_work_items = get_global_size(0);\n        \n        // Process elements in a strided fashion to maintain coalesced reads\n        // and balance work across all threads\n        for (uint idx = gid; idx < n; idx += total_work_items) {\n            const long value = input[idx];\n            const long dst_idx = indices[idx];\n            output[dst_idx] = value;\n        }\n    }\n    \"\"\"\n\n    # Parameters\n    num_iterations = 10\n    n = 1000000  # Number of elements to process\n    \n    # Initialize data\n    np.random.seed(42)\n    input_host = np.random.randint(0, 100, size=n, dtype=np.int64)\n    # Generate indices without duplicates to avoid race conditions in testing\n    indices_host = np.random.permutation(n).astype(np.int64)\n    output_host = np.zeros(n, dtype=np.int64)\n    \n    # Function to verify the results\n    def verification_fn():\n        result_host = np.zeros_like(output_host)\n        cl.enqueue_copy(queue, result_host, output_buf)\n        expected = np.zeros_like(output_host)\n        for i in range(n):\n            expected[indices_host[i]] = input_host[i]\n        ok = np.array_equal(result_host, expected)\n        return ok, \"Results match!\" if ok else \"Results do NOT match!\"\n\n    # Create OpenCL context, queue, and buffers\n    platforms = cl.get_platforms()\n    if not platforms:\n        raise RuntimeError(\"No OpenCL platforms found.\")\n    platform = platforms[0]\n    devices = platform.get_devices(device_type=cl.device_type.GPU)\n    if not devices:\n        devices = platform.get_devices()\n    device = devices[0]\n    print(f\"Using OpenCL device: {device.name}\")\n    ctx = cl.Context([device])\n    queue = cl.CommandQueue(ctx)\n\n    mf = cl.mem_flags\n    input_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=input_host)\n    indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_host)\n    output_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=output_host.nbytes)\n    \n    # Build the kernel\n    program = cl.Program(ctx, opencl_code).build()\n    scatter_kernel = program.scatter_kernel\n    \n    # For Adreno GPUs, work group sizes that are multiples of 64 are often optimal\n    local_size = 256  # Multiple of 64 for Adreno\n    \n    # Calculate total number of work items needed\n    # Use fewer threads than elements, with each thread processing multiple elements\n    compute_units = 46  # From device info\n    work_items_per_cu = 256  # Adjusted for Adreno\n    total_work_items = compute_units * work_items_per_cu\n    \n    # Ensure global size is a multiple of local size\n    global_size = ((total_work_items + local_size - 1) // local_size) * local_size\n    \n    execution_times = []\n    for i in range(num_iterations):\n        # Clear output buffer before each run\n        cl.enqueue_fill_buffer(queue, output_buf, np.int64(0), 0, output_host.nbytes)\n        \n        # Set kernel arguments\n        args = (np.int64(n), input_buf, indices_buf, output_buf)\n        \n        queue.finish()\n        start_time = time.time()\n        \n        # Launch kernel\n        scatter_kernel(queue, (global_size,), (local_size,), *args)\n        \n        queue.finish()\n        end_time = time.time()\n        elapsed_time = (end_time - start_time) * 1000  # Convert to ms\n        \n        execution_times.append(elapsed_time)\n        print(f\"Iteration {i+1}: {elapsed_time:.2f} ms\")\n\n    avg_time = sum(execution_times) / len(execution_times)\n    min_time = min(execution_times)\n    max_time = max(execution_times)\n\n    is_correct, msg = verification_fn()\n\n    timing_result = {\n        \"iterations\": num_iterations,\n        \"average_ms\": avg_time,\n        \"min_ms\": min_time,\n        \"max_ms\": max_time,\n        \"all_times_ms\": execution_times,\n        \"correct_result\": is_correct,\n        \"verification_feedback\": msg,\n        \"local_size\": local_size,\n        \"global_size\": global_size\n    }\n    return timing_result",
+  "timing_info": {
+    "iterations": 10,
+    "average_ms": 0.22361278533935547,
+    "min_ms": 0.06937980651855469,
+    "max_ms": 1.5988349914550781,
+    "all_times_ms": [
+      1.5988349914550781,
+      0.0782012939453125,
+      0.0705718994140625,
+      0.06985664367675781,
+      0.07009506225585938,
+      0.06961822509765625,
+      0.07009506225585938,
+      0.06985664367675781,
+      0.06937980651855469,
+      0.06961822509765625
+    ],
+    "correct_result": true,
+    "verification_feedback": "Results match!",
+    "local_size": 256,
+    "global_size": 11776
+  }
+}

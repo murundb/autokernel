@@ -112,6 +112,8 @@ if __name__ == "__main__":
                     gpu_type, task, constraints, manual_context, history
                 )
 
+                if 'kernels' not in kernel_config:
+                    continue
                 for kernel_id in range(len(kernel_config['kernels'])):
                     print(f"Running kernel {kernel_id} for iteration {i}")
                     local_vars = {}
@@ -163,13 +165,14 @@ if __name__ == "__main__":
                 txt_f.write("\n\n".join(kernel_and_timing_strings))
             # After collecting kernel_and_timing_strings, also save the best kernel as JSON
             best_idx = min(
-                (i for i in kernel_configs if 'average_ms' in kernel_configs[i]['timing_info']),
+                (i for i in kernel_configs if 'average_ms' in kernel_configs[i]['timing_info'] and 'correct_result' in kernel_configs[i]['timing_info'] and kernel_configs[i]['timing_info']['correct_result']),
                 key=lambda i: kernel_configs[i]['timing_info']['average_ms'],
                 default=None
             )
             if best_idx is not None:
                 best_kernel = {
                     "task": task,
+                    "task_name": task_entry['kernel_name'],
                     "kernel_code": kernel_configs[best_idx]['kernel_code'],
                     "timing_info": kernel_configs[best_idx]['timing_info']
                 }
