@@ -1,13 +1,12 @@
 [
-  "best_kernel_simpleMLP.json",
-  "best_kernel__unfold_backward_elementwise_kernel.json",
-  "best_kernel_matrixMultiply.json",
-  "best_kernel_matrixReduce.json",
-  "best_kernel_renormRowsL1.json",
-  "best_kernel_residualBlock.json",
-  "best_kernel_sampleMultinomialOnce.json",
-  "best_kernel_scatter_kernel.json",
-  "best_kernel_unique_bool_write_inverse_indices.json",
-  "best_kernel_unique_bool_write_output.json",
-  "best_kernel_upsample_bilinear2d_backward_out_frame.json"
+  "best_kernel_1_Square_matrix_multiplication_.json",
+  "best_kernel_block_size_optimized_base.json",
+  "best_kernel_stride_loop_matmul_base.json",
+  "best_kernel_tiled_coalesced_unroll_base.json",
+  "best_kernel_warp_shfl_matmul_base.json",
+  "best_kernel_vectorized_coalesced_base_base.json",
+  "best_kernel_aligned_vectorized_matmul_base_base.json",
+  "best_kernel_block_64_optimized_base_base.json",
+  "best_kernel_shared_memory_reuse_optimization_base_base.json",
+  "best_kernel_efficient_thread_block_mapping_base_base.json"
 ]

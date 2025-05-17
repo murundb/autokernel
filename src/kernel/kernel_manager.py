@@ -46,7 +46,8 @@ class KernelManager:
         - Propose as many {gpu_software} kernels as needed to accomplish the task. The kernels should aim to reduce the runtime of the task, while ensuring the final output returns the correct result.""" + """
         - For each kernel, return:
             - "runner_setup": Sets up the runner for this kernel
-        - For example for computing 2*A + B on two matrices A and B we can have one kernel that does the compute or we can split it into two kernels. Below is the example of two kernels accomplishing 2*A+B of size 4096*4096:
+            - "native_torch_setup": Sets up the same operation in native torch for comparision
+        - For example for computing 2*A + B on two matrices A and B we can have one kernel that does the compute or we can split it into two kernels. Below is the example of two kernels accomplishing 2*A+B of size 1024*1024:
             "runner_setup":
                 "
                 def runner_setup():
@@ -97,7 +98,7 @@ class KernelManager:
                         # Get kernel inputs and grid size from the setup function
                         args = (2, A_buf, intermediate_result_buf, np.int32(dim))
                         # Normalise grid / block specification to sequences
-                        global_size = [4096]
+                        global_size = [1024]
                         local_size = [512]
                         queue.finish()
                         start_time = time.time()
@@ -110,7 +111,7 @@ class KernelManager:
                         # Get kernel inputs and grid size from the setup function
                         args = (intermediate_result_buf, B_buf, result_buf, np.int32(dim))
                         # Normalise grid / block specification to sequences
-                        global_size = [4096]
+                        global_size = [1024]
                         local_size = [1024]
 
                         queue.finish()
@@ -143,6 +144,80 @@ class KernelManager:
                     }
                     return timing_result
                     ",
+            "native_torch_setup":
+                "
+                def native_torch_setup():
+                        import torch
+                        import torch.nn as nn
+                        import time
+
+
+                        class Model(nn.Module):
+                            \"\"\"
+                            Simple model that performs a single square matrix multiplication (C = A * B)
+                            \"\"\"
+
+                            def __init__(self):
+                                super(Model, self).__init__()
+
+                            def forward(self, A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+                                \"\"\"
+                                Performs the matrix multiplication.
+
+                                Args:
+                                    A (torch.Tensor): Input matrix A of shape (N, N).
+                                    B (torch.Tensor): Input matrix B of shape (N, N).
+
+                                Returns:
+                                    torch.Tensor: Output matrix C of shape (N, N).
+                                \"\"\"
+                                return 2 * A + B
+
+
+                        N = 1024
+
+
+                        def get_inputs():
+                            A = torch.randn(N, N)
+                            B = torch.randn(N, N)
+                            return [A, B]
+
+
+                        def get_init_inputs():
+                            return []  # No special initialization inputs needed
+
+                        # Timing and verification
+                        model = Model()
+                        inputs = get_inputs()
+                        num_iterations = 10
+                        execution_times = []
+                        block_size = None
+                        grid_size = None
+
+                        # Compute reference result for correctness check
+                        for _ in range(num_iterations):
+                            start = time.time()
+                            output = model(*inputs)
+                            end = time.time()
+                            elapsed_ms = (end - start) * 1000
+                            execution_times.append(elapsed_ms)
+
+                        avg_time = sum(execution_times) / len(execution_times)
+                        min_time = min(execution_times)
+                        max_time = max(execution_times)
+
+                        # Correctness check
+                        is_correct = True
+
+                        return {
+                            "output": output,
+                            "iterations": num_iterations,
+                            "average_ms": avg_time,
+                            "min_ms": min_time,
+                            "max_ms": max_time,
+                            "all_times_ms": execution_times,
+                        }
+                "
         - Return a python dictionary in JSON format with key "kernels", whose value is a list of dictionaries as described above.
         - Do not include explanations, markdown formatting, or extra commentary. Do not include language markers, code block formatting, triple backticks, or any other quotation or formatting around the JSON output. Return only the raw JSON.
         """

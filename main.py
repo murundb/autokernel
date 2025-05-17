@@ -8,7 +8,6 @@ from src.prompt.history import PromptHistory
 from src.gpu_types import GPUType
 from src.kernel.kernel_manager import KernelManager
 from src.utils.device_info import get_device_info
-from src.utils.dynamic_setup import create_input_setup_fn, create_verification_fn
 import concurrent.futures
 
 def run_with_timeout(func, timeout, *args, **kwargs):
@@ -38,8 +37,11 @@ else:
 kernel_manager = KernelManager(llm, simple_tokenizer, max_tokens=8000)
 
 # Tasks
-with open("data/tasks.json", "r", encoding="utf-8") as f:
-    tasks_data = json.load(f)
+tasks_data = None
+
+if os.path.exists("data/task_sakana.json"):
+    with open("data/task_sakana.json", "r", encoding="utf-8") as f:
+        tasks_data = json.load(f)
 
 # Ensure output directory exists
 output_dir = "output"
@@ -64,7 +66,7 @@ if __name__ == "__main__":
 
     if "tasks" in tasks_data:
         tasks_list = tasks_data["tasks"]
-        for task_entry in tasks_list:
+        for task_entry in tasks_list[:10]:
             if task_entry["disabled"]:
                 print(f"Skipping disabled task: {task_entry['kernel_name']}")
                 continue
@@ -73,7 +75,8 @@ if __name__ == "__main__":
                     gpu_software=gpu_software,
                     gpu_manufacturer=gpu_manufacturer,
                     gpu_hardware=gpu_hardware,
-                    code=task_entry["code"]
+                    code=task_entry["PyTorch_Code_Module"],
+                    cuda_sample=task_entry["code"]
                 )
             else:
                 task = task_entry["task"].format(
@@ -96,8 +99,8 @@ if __name__ == "__main__":
                     + "Maximize GPU utilization. "
                     + f"Device Information: {device_info_str}"
                     + (
-                        f"\nThe previous generated kernel: {kernel_configs[i-1]['kernel_code']} took {kernel_configs[i-1]['timing_info']['average_ms']} ms. Optimize further keeping in mind the device info such as max work group size and memory limitations."
-                        if i > 0 and kernel_configs.get(i-1) and kernel_configs[i-1]['timing_info'] and 'average_ms' in kernel_configs[i-1]['timing_info']
+                        f"\nThe previous generated kernel: {kernel_configs[i-1]['kernel_code']} took {kernel_configs[i-1]['timing_info']['average_ms']} ms. The native torch implementation takes {kernel_configs[i-1]['torch_timing_info']['average_ms']} ms. Optimize to beat the native torch implementation keeping in mind the device info such as max work group size and memory limitations."
+                        if i > 0 and kernel_configs.get(i-1) and kernel_configs[i-1]['timing_info'] and kernel_configs[i-1]['torch_timing_info'] and 'average_ms' in kernel_configs[i-1]['timing_info'] and 'average_ms' in kernel_configs[i-1]['torch_timing_info']
                         else (
                             f"\nThe previous generated kernel: {kernel_configs[i-1]['kernel_code']} failed to run. Error: {kernel_configs[i-1]['timing_info']['error']}. Please fix the issue and optimize further."
                             if i > 0 and kernel_configs.get(i-1) and kernel_configs[i-1]['timing_info'] and 'error' in kernel_configs[i-1]['timing_info']
@@ -114,6 +117,28 @@ if __name__ == "__main__":
 
                 if 'kernels' not in kernel_config:
                     continue
+                
+                # Run torch kernel for comparision
+                print(f"Running native torch for kernel id 0")
+                local_vars_torch = {}
+                exec(kernel_config['kernels'][0]['native_torch_setup'], globals(), local_vars_torch)
+                native_torch_setup_fn = local_vars_torch['native_torch_setup']
+                torch_timing_data = None
+                try:
+                    torch_timing_data = run_with_timeout(native_torch_setup_fn, timeout=20)  # 10 seconds timeout
+                    if torch_timing_data is None:
+                        raise Exception("Torch function did not complete in time.")
+                    else:
+                        print(f"Torch kernel took {torch_timing_data['average_ms']} ms")
+                except Exception as e:
+                    import traceback
+                    print(e)
+                    print(traceback.format_exc())
+                    torch_timing_data = {
+                        "error": str(e),
+                        "traceback": traceback.format_exc()
+                    }
+
                 for kernel_id in range(len(kernel_config['kernels'])):
                     print(f"Running kernel {kernel_id} for iteration {i}")
                     local_vars = {}
@@ -125,7 +150,8 @@ if __name__ == "__main__":
                             raise Exception("Setup function did not complete in time.")
                         kernel_configs[i] = {
                             "kernel_code": kernel_config['kernels'][kernel_id]['runner_setup'],
-                            "timing_info": timing_data
+                            "timing_info": timing_data,
+                            "torch_timing_info": torch_timing_data
                         }
                     except Exception as e:
                         import traceback
@@ -137,7 +163,8 @@ if __name__ == "__main__":
                         }
                         kernel_configs[i] = {
                             "kernel_code": kernel_config['kernels'][kernel_id]['runner_setup'],
-                            "timing_info": timing_data
+                            "timing_info": timing_data,
+                            "torch_timing_info": torch_timing_data
                         }
 
             print("-------------------------------------------------------------------------------------")
